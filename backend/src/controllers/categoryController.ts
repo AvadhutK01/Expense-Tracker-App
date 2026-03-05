@@ -11,19 +11,20 @@ interface CategoryInput {
     amount: number;
     isRepeat: boolean;
     isAddToSavings: boolean;
+    isUsedForExpense: boolean;
 }
 
 interface AutoDebitInput {
-  amount: number;
-  categoryToDeduct: string;
-  debitDateTime: Date;
+    amount: number;
+    categoryToDeduct: string;
+    debitDateTime: Date;
 }
 
 interface UpdateAutoDebitInput {
-  _id: string;
-  amount?: number;
-  categoryToDeduct?: string;
-  debitDateTime?: Date;
+    _id: string;
+    amount?: number;
+    categoryToDeduct?: string;
+    debitDateTime?: Date;
 }
 
 interface UpdateCategoriesRequestBody {
@@ -76,9 +77,38 @@ export async function initiateCategories(
             AutoDebitModel.deleteMany({}),
         ]);
 
-        const docs = inputs.map((c) => ({ name: c.name.trim(), amount: c.amount }));
+        const docs = inputs.map((c) => {
+            let isUsedForExpense = c.isUsedForExpense ?? true;
+            let isAddToSavings = c.isAddToSavings ?? true;
+
+            if (c.name.trim().toLowerCase() === 'loan') {
+                isUsedForExpense = false;
+                isAddToSavings = false;
+            }
+            if (c.name.trim().toLowerCase() === 'savings') isUsedForExpense = true;
+
+            return {
+                name: c.name.trim(),
+                amount: c.amount,
+                isAddToSavings: isAddToSavings,
+                isUsedForExpense: isUsedForExpense
+            };
+        });
 
         const categories = await CategoryModel.insertMany(docs);
+
+        // Log category creation
+        for (const cat of categories) {
+            await TransactionLogModel.create({
+                categoryId: cat._id,
+                categoryName: cat.name,
+                changeType: 'add',
+                changeAmount: cat.amount,
+                previousAmount: 0,
+                newAmount: cat.amount,
+                transaction_note: 'Category created'
+            });
+        }
 
         const recurringDocs = docs.filter((c) => c.name.trim().toLowerCase() !== 'loan');
         const recurring = await RecurringCategoryModel.insertMany(recurringDocs);
@@ -153,30 +183,77 @@ export async function addNewCategories(
             return;
         }
 
-        const docs = inputs.map(c => ({ name: c.name.trim(), amount: c.amount }));
-
         const normalDocs = inputs
             .filter(c => !c.isRepeat)
-            .map(c => ({ name: c.name.trim(), amount: c.amount, isAddToSavings: c.isAddToSavings }));
+            .map(c => {
+                let isUsedForExpense = c.isUsedForExpense ?? true;
+                let isAddToSavings = c.isAddToSavings ?? true;
+
+                if (c.name.trim().toLowerCase() === 'loan') {
+                    isUsedForExpense = false;
+                    isAddToSavings = false;
+                }
+                if (c.name.trim().toLowerCase() === 'savings') isUsedForExpense = true;
+
+                return {
+                    name: c.name.trim(),
+                    amount: c.amount,
+                    isAddToSavings: isAddToSavings,
+                    isUsedForExpense: isUsedForExpense
+                };
+            });
 
         const recurringDocs = inputs
             .filter(c => c.isRepeat)
-            .map(c => ({ name: c.name.trim(), amount: c.amount, isAddToSavings: c.isAddToSavings }));
+            .map(c => {
+                let isUsedForExpense = c.isUsedForExpense ?? true;
+                let isAddToSavings = c.isAddToSavings ?? true;
+
+                if (c.name.trim().toLowerCase() === 'loan') {
+                    isUsedForExpense = false;
+                    isAddToSavings = false;
+                }
+                if (c.name.trim().toLowerCase() === 'savings') isUsedForExpense = true;
+
+                return {
+                    name: c.name.trim(),
+                    amount: c.amount,
+                    isAddToSavings: isAddToSavings,
+                    isUsedForExpense: isUsedForExpense
+                };
+            });
 
         const insertOps: Promise<any>[] = [];
 
-        if (normalDocs.length > 0) insertOps.push(CategoryModel.insertMany(normalDocs));
+        let insertedNormal: any[] = [];
+        let insertedRecurring: any[] = [];
+
+        if (normalDocs.length > 0) {
+            const normal = await CategoryModel.insertMany(normalDocs);
+            insertedNormal = normal;
+        }
         if (recurringDocs.length > 0) {
-            insertOps.push(CategoryModel.insertMany(recurringDocs));
-            insertOps.push(RecurringCategoryModel.insertMany(recurringDocs));
+            const recurring = await CategoryModel.insertMany(recurringDocs);
+            await RecurringCategoryModel.insertMany(recurringDocs);
+            insertedRecurring = recurring;
         }
 
-        await Promise.all(insertOps);
-
+        const allInserted = [...insertedNormal, ...insertedRecurring];
+        for (const cat of allInserted) {
+            await TransactionLogModel.create({
+                categoryId: cat._id,
+                categoryName: cat.name,
+                changeType: 'add',
+                changeAmount: cat.amount,
+                previousAmount: 0,
+                newAmount: cat.amount,
+                transaction_note: 'Category created'
+            });
+        }
 
         res.status(201).json({
             message: 'New categories added successfully',
-            count: docs.length,
+            count: inputs.length,
         });
         return;
     } catch (err) {
@@ -220,15 +297,54 @@ export async function updateCategories(
             seen.add(key);
         }
 
-        const updatePromises = categories.map(({ name, amount }) =>
-            modelToUpdate.findOneAndUpdate(
-                { name: new RegExp(`^${name.trim()}$`, 'i') },
-                { amount },
-                { new: true }
-            )
-        );
+        const updatedDocs: (ICategory | null)[] = [];
+        for (const cat of categories) {
+            const existing = await modelToUpdate.findOne({ name: new RegExp(`^${cat.name.trim()}$`, 'i') });
+            if (existing) {
+                const previousAmount = existing.amount;
+                const newAmount = cat.amount;
+                const changeAmount = Math.abs(newAmount - previousAmount);
+                const changeType = newAmount >= previousAmount ? 'add' : 'subtract';
 
-        const updatedDocs = await Promise.all(updatePromises);
+                existing.amount = newAmount;
+
+                if (cat.name.trim().toLowerCase() === 'loan') {
+                    existing.isUsedForExpense = false;
+                    existing.isAddToSavings = false;
+                } else if (cat.name.trim().toLowerCase() === 'savings') {
+                    existing.isUsedForExpense = true;
+                } else if ('isUsedForExpense' in cat) {
+                    existing.isUsedForExpense = cat.isUsedForExpense;
+                }
+
+                await existing.save();
+
+                if (mode === 'permanent' && 'isRepeat' in cat) {
+                    await RecurringCategoryModel.findOneAndUpdate(
+                        { name: new RegExp(`^${cat.name.trim()}$`, 'i') },
+                        { status: cat.isRepeat }
+                    );
+                }
+
+                updatedDocs.push(existing);
+
+                if (changeAmount !== 0) {
+                    await TransactionLogModel.create({
+                        categoryId: existing._id,
+                        categoryName: existing.name,
+                        changeType,
+                        changeAmount,
+                        previousAmount,
+                        newAmount,
+                        transaction_note: changeType === 'add'
+                            ? `money added to ${existing.name}`
+                            : `money deducted from ${existing.name}`
+                    });
+                }
+            } else {
+                updatedDocs.push(null);
+            }
+        }
 
         const notFound = categories
             .map((c, idx) => ({ cat: c, updated: updatedDocs[idx] }))
@@ -253,6 +369,13 @@ export async function updateCategories(
         });
     }
 }
+interface UpdateSingleCategoryInput {
+    name: string;
+    amount: number;
+    type: 'add' | 'subtract';
+    transaction_note?: string;
+}
+
 export async function updateSingleCategory(
     req: Request,
     res: Response,
@@ -296,6 +419,8 @@ export async function updateSingleCategory(
         category.amount = newAmount;
         await category.save();
 
+        const { transaction_note } = req.body;
+
         await TransactionLogModel.create({
             categoryId: category._id,
             categoryName: category.name,
@@ -303,6 +428,7 @@ export async function updateSingleCategory(
             changeAmount: amount,
             previousAmount,
             newAmount,
+            transaction_note: transaction_note || undefined
         });
 
         res.status(200).json({
@@ -359,7 +485,33 @@ export async function getAllCategories(
         if (type === 'recurring') {
             categories = await RecurringCategoryModel.find().lean();
         } else {
-            categories = await CategoryModel.find().lean();
+            const rawCategories = await CategoryModel.find().lean();
+
+            // Calculate trends for savings and loan (last 48 hours)
+            const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+
+            categories = await Promise.all(rawCategories.map(async (cat) => {
+                const name = cat.name.toLowerCase();
+                if (name === 'savings' || name === 'loan') {
+                    const latestLog = await TransactionLogModel.findOne({
+                        categoryName: cat.name,
+                        createdAt: { $gte: twoDaysAgo }
+                    })
+                        .sort({ createdAt: -1 })
+                        .lean();
+
+                    if (latestLog) {
+                        return {
+                            ...cat,
+                            trend: {
+                                direction: latestLog.changeType === 'add' ? 'up' : 'down',
+                                changeType: latestLog.changeType
+                            }
+                        };
+                    }
+                }
+                return cat;
+            }));
         }
 
         res.status(200).json({
@@ -374,6 +526,81 @@ export async function getAllCategories(
             message: 'Something went wrong!',
         });
         return;
+    }
+}
+
+/**
+ * Fetches paginated transaction logs.
+ */
+export async function getTransactionLogs(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const { page = 1, limit = 20 } = req.query;
+        const skip = (Number(page) - 1) * Number(limit);
+
+        const logs = await TransactionLogModel.find()
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(Number(limit))
+            .lean();
+
+        const total = await TransactionLogModel.countDocuments();
+
+        res.status(200).json({
+            message: 'Fetched logs successfully.',
+            logs,
+            pagination: {
+                total,
+                page: Number(page),
+                limit: Number(limit),
+                pages: Math.ceil(total / Number(limit))
+            }
+        });
+    } catch (err) {
+        console.error('getTransactionLogs error:', err);
+        res.status(500).json({ message: 'Failed to fetch logs' });
+    }
+}
+
+/**
+ * Fetches graph data: daily savings/loan amounts from transaction logs.
+ */
+export async function getGraphData(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        // Get savings and loan logs sorted by date
+        const savingsLogs = await TransactionLogModel.find({ categoryName: { $regex: /^savings$/i } })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        const loanLogs = await TransactionLogModel.find({ categoryName: { $regex: /^loan$/i } })
+            .sort({ createdAt: 1 })
+            .lean();
+
+        // Group by date (IST), keeping last entry per day
+        const groupByDate = (logs: any[]) => {
+            const map = new Map<string, number>();
+            for (const log of logs) {
+                const date = new Date(log.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+                map.set(date, log.newAmount);
+            }
+            return Array.from(map.entries()).map(([date, amount]) => ({ date, amount }));
+        };
+
+        res.status(200).json({
+            message: 'Graph data fetched.',
+            savings: groupByDate(savingsLogs),
+            loan: groupByDate(loanLogs),
+        });
+    } catch (err) {
+        console.error('getGraphData error:', err);
+        res.status(500).json({ message: 'Failed to fetch graph data' });
     }
 }
 
@@ -437,10 +664,34 @@ export async function payLoanAmount(
             return;
         }
 
+        const prevCatAmount = category.amount;
+        const prevLoanAmount = loanCat.amount;
+
         category.amount -= amount;
         loanCat.amount -= amount;
 
-        await Promise.all([category.save(), loanCat.save()]);
+        await Promise.all([
+            category.save(),
+            loanCat.save(),
+            TransactionLogModel.create({
+                categoryId: category._id,
+                categoryName: category.name,
+                changeType: 'subtract',
+                changeAmount: amount,
+                previousAmount: prevCatAmount,
+                newAmount: category.amount,
+                transaction_note: `Paid loan from ${category.name}`
+            }),
+            TransactionLogModel.create({
+                categoryId: loanCat._id,
+                categoryName: loanCat.name,
+                changeType: 'subtract',
+                changeAmount: amount,
+                previousAmount: prevLoanAmount,
+                newAmount: loanCat.amount,
+                transaction_note: `Loan payment received from ${category.name}`
+            })
+        ]);
 
         res.status(200).json({
             message: `Paid ${amount} from "${category.name}" and "loan" successfully.`,
@@ -494,7 +745,7 @@ export async function cronController(
         );
         console.log('[Update] Reset amounts of all categories except "savings" and "loan" to 0.');
 
-        const recurringCats = await RecurringCategoryModel.find().lean();
+        const recurringCats = await RecurringCategoryModel.find({ status: true }).lean();
 
         for (const rec of recurringCats) {
             const updated = await CategoryModel.findOneAndUpdate(
@@ -511,6 +762,15 @@ export async function cronController(
                 console.log(
                     `[Recurring Update] "${rec.name}" increased by ${rec.amount}. New amount: ${updated.amount}`
                 );
+                await TransactionLogModel.create({
+                    categoryId: updated._id,
+                    categoryName: updated.name,
+                    changeType: 'add',
+                    changeAmount: rec.amount,
+                    previousAmount: updated.amount - rec.amount,
+                    newAmount: updated.amount,
+                    transaction_note: 'Monthly recurring update'
+                });
             }
         }
         res.status(200).json({
@@ -554,6 +814,27 @@ export const bankEmiDebitCron = async (req: Request,
             console.warn('[Bank EMI Debit] "loan" category not found.');
         } else {
             console.log(`[Bank EMI Debit] Debited ${debitAmount} from "loan". New amount: ${updatedLoan.amount}`);
+            await TransactionLogModel.create({
+                categoryId: updatedLoan._id,
+                categoryName: updatedLoan.name,
+                changeType: 'subtract',
+                changeAmount: debitAmount,
+                previousAmount: updatedLoan.amount + debitAmount,
+                newAmount: updatedLoan.amount,
+                transaction_note: 'Bank EMI debit'
+            });
+            // Also log for savings
+            if (updatedSavings) {
+                await TransactionLogModel.create({
+                    categoryId: updatedSavings._id,
+                    categoryName: updatedSavings.name,
+                    changeType: 'subtract',
+                    changeAmount: debitAmount,
+                    previousAmount: updatedSavings.amount + debitAmount,
+                    newAmount: updatedSavings.amount,
+                    transaction_note: 'Bank EMI debit'
+                });
+            }
         }
         res.status(200).json({
             message: "cron ran succesfully!"
@@ -599,9 +880,14 @@ export async function deleteCategory(
 
         const regexList = lowerNames.map((n) => new RegExp(`^${n}$`, 'i'));
 
+        // Fetch category IDs before deleting to clean up logs
+        const categoriesToDelete = await CategoryModel.find({ name: { $in: regexList } }).select('_id');
+        const categoryIds = categoriesToDelete.map(c => c._id);
+
         const [deletedFromMain, deletedFromRecurring] = await Promise.all([
             CategoryModel.deleteMany({ name: { $in: regexList } }),
             RecurringCategoryModel.deleteMany({ name: { $in: regexList } }),
+            TransactionLogModel.deleteMany({ categoryId: { $in: categoryIds } })
         ]);
         const totalDeleted = (deletedFromMain?.deletedCount || 0) + (deletedFromRecurring?.deletedCount || 0);
 
@@ -777,10 +1063,34 @@ export async function borrowMoney(
             return;
         }
 
+        const prevCatAmount = category.amount;
+        const prevLoanAmount = loanCat.amount;
+
         category.amount += amount;
         loanCat.amount += amount;
 
-        await Promise.all([category.save(), loanCat.save()]);
+        await Promise.all([
+            category.save(),
+            loanCat.save(),
+            TransactionLogModel.create({
+                categoryId: category._id,
+                categoryName: category.name,
+                changeType: 'add',
+                changeAmount: amount,
+                previousAmount: prevCatAmount,
+                newAmount: category.amount,
+                transaction_note: `Borrowed money to ${category.name}`
+            }),
+            TransactionLogModel.create({
+                categoryId: loanCat._id,
+                categoryName: loanCat.name,
+                changeType: 'add',
+                changeAmount: amount,
+                previousAmount: prevLoanAmount,
+                newAmount: loanCat.amount,
+                transaction_note: `Loan amount increased due to borrowing in ${category.name}`
+            })
+        ]);
 
         res.status(200).json({
             message: `Lent ${amount} to "${category.name}" and incremented "loan" by the same amount.`,
@@ -798,147 +1108,147 @@ export async function borrowMoney(
 }
 
 export async function getAllAutoDebits(
-  req: Request,
-  res: Response,
-  next: NextFunction
+    req: Request,
+    res: Response,
+    next: NextFunction
 ) {
-  try {
-    const autoDebits = await AutoDebitModel.find().populate('categoryToDeduct').lean();
+    try {
+        const autoDebits = await AutoDebitModel.find().populate('categoryToDeduct').lean();
 
-    res.status(200).json({
-      message: 'Fetched all auto-debit records successfully.',
-      count: autoDebits.length,
-      autoDebits,
-    });
-  } catch (err) {
-    console.error('getAllAutoDebits error:', err);
-    res.status(500).json({ message: 'Something went wrong while fetching auto-debits.' });
-  }
+        res.status(200).json({
+            message: 'Fetched all auto-debit records successfully.',
+            count: autoDebits.length,
+            autoDebits,
+        });
+    } catch (err) {
+        console.error('getAllAutoDebits error:', err);
+        res.status(500).json({ message: 'Something went wrong while fetching auto-debits.' });
+    }
 }
 
 export async function createManyAutoDebits(
-  req: Request,
-  res: Response,
-  next: NextFunction
+    req: Request,
+    res: Response,
+    next: NextFunction
 ) {
-  try {
-    const inputs: AutoDebitInput[] = req.body;
+    try {
+        const inputs: AutoDebitInput[] = req.body;
 
-    if (!Array.isArray(inputs) || inputs.length === 0) {
-      res.status(400).json({ message: 'Input must be a non-empty array.' });
-      return;
+        if (!Array.isArray(inputs) || inputs.length === 0) {
+            res.status(400).json({ message: 'Input must be a non-empty array.' });
+            return;
+        }
+
+        const categoryNames = inputs.map((i) => i.categoryToDeduct.trim().toLowerCase());
+        const categories = await CategoryModel.find({
+            name: { $in: categoryNames.map((n) => new RegExp(`^${n}$`, 'i')) },
+        }).lean();
+
+        const foundNames = categories.map((c) => c.name.toLowerCase());
+        const missingNames = categoryNames.filter((n) => !foundNames.includes(n));
+
+        if (missingNames.length > 0) {
+            res.status(400).json({
+                message: `Invalid or missing categories: ${missingNames.join(', ')}`,
+            });
+            return;
+        }
+
+        const categoryMap = new Map(
+            categories.map((c) => [c.name.toLowerCase(), c._id])
+        );
+
+        const docs = inputs.map((input) => ({
+            amount: input.amount,
+            categoryToDeduct: categoryMap.get(input.categoryToDeduct.trim().toLowerCase()),
+            debitDateTime: new Date(input.debitDateTime),
+        }));
+
+        const inserted = await AutoDebitModel.insertMany(docs);
+
+        res.status(201).json({
+            message: 'Auto-debits created successfully.',
+            count: inserted.length,
+            autoDebits: inserted,
+        });
+    } catch (err) {
+        console.error('createManyAutoDebits error:', err);
+        res.status(500).json({ message: 'Something went wrong while creating auto-debits.' });
     }
-
-    const categoryNames = inputs.map((i) => i.categoryToDeduct.trim().toLowerCase());
-    const categories = await CategoryModel.find({
-      name: { $in: categoryNames.map((n) => new RegExp(`^${n}$`, 'i')) },
-    }).lean();
-
-    const foundNames = categories.map((c) => c.name.toLowerCase());
-    const missingNames = categoryNames.filter((n) => !foundNames.includes(n));
-
-    if (missingNames.length > 0) {
-      res.status(400).json({
-        message: `Invalid or missing categories: ${missingNames.join(', ')}`,
-      });
-      return;
-    }
-
-    const categoryMap = new Map(
-      categories.map((c) => [c.name.toLowerCase(), c._id])
-    );
-
-    const docs = inputs.map((input) => ({
-      amount: input.amount,
-      categoryToDeduct: categoryMap.get(input.categoryToDeduct.trim().toLowerCase()),
-      debitDateTime: new Date(input.debitDateTime),
-    }));
-
-    const inserted = await AutoDebitModel.insertMany(docs);
-
-    res.status(201).json({
-      message: 'Auto-debits created successfully.',
-      count: inserted.length,
-      autoDebits: inserted,
-    });
-  } catch (err) {
-    console.error('createManyAutoDebits error:', err);
-    res.status(500).json({ message: 'Something went wrong while creating auto-debits.' });
-  }
 }
 
 export async function updateManyAutoDebits(
-  req: Request,
-  res: Response,
-  next: NextFunction
+    req: Request,
+    res: Response,
+    next: NextFunction
 ) {
-  try {
-    const updates: UpdateAutoDebitInput[] = req.body;
+    try {
+        const updates: UpdateAutoDebitInput[] = req.body;
 
-    if (!Array.isArray(updates) || updates.length === 0) {
-      res.status(400).json({ message: 'Input must be a non-empty array.' });
-      return;
-    }
+        if (!Array.isArray(updates) || updates.length === 0) {
+            res.status(400).json({ message: 'Input must be a non-empty array.' });
+            return;
+        }
 
-    const categoryNames: string[] = Array.from(
-      new Set(
-        updates
-          .map((u) => u.categoryToDeduct?.trim().toLowerCase())
-          .filter((n): n is string => typeof n === 'string' && n.length > 0)
-      )
-    );
+        const categoryNames: string[] = Array.from(
+            new Set(
+                updates
+                    .map((u) => u.categoryToDeduct?.trim().toLowerCase())
+                    .filter((n): n is string => typeof n === 'string' && n.length > 0)
+            )
+        );
 
-    const categoryMap = new Map<string, string>();
+        const categoryMap = new Map<string, string>();
 
-    if (categoryNames.length > 0) {
-      const categories = await CategoryModel.find({
-        name: { $in: categoryNames.map((n) => new RegExp(`^${n}$`, 'i')) },
-      }).lean();
+        if (categoryNames.length > 0) {
+            const categories = await CategoryModel.find({
+                name: { $in: categoryNames.map((n) => new RegExp(`^${n}$`, 'i')) },
+            }).lean();
 
-      const foundNames = categories.map((c) => c.name.toLowerCase());
-      const missing = categoryNames.filter((n) => !foundNames.includes(n));
+            const foundNames = categories.map((c) => c.name.toLowerCase());
+            const missing = categoryNames.filter((n) => !foundNames.includes(n));
 
-      if (missing.length > 0) {
-        res.status(400).json({
-          message: `Invalid categories in updates: ${missing.join(', ')}`,
+            if (missing.length > 0) {
+                res.status(400).json({
+                    message: `Invalid categories in updates: ${missing.join(', ')}`,
+                });
+                return;
+            }
+
+            for (const cat of categories) {
+                categoryMap.set(cat.name.toLowerCase(), cat._id.toString());
+            }
+        }
+
+        const updatePromises = updates.map(async (update) => {
+            const { _id, amount, categoryToDeduct, debitDateTime } = update;
+            const updateFields: any = {};
+
+            if (amount !== undefined) updateFields.amount = amount;
+            if (categoryToDeduct)
+                updateFields.categoryToDeduct = categoryMap.get(categoryToDeduct.trim().toLowerCase());
+            if (debitDateTime) updateFields.debitDateTime = new Date(debitDateTime);
+
+            return AutoDebitModel.findByIdAndUpdate(_id, updateFields, { new: true });
         });
-        return;
-      }
 
-      for (const cat of categories) {
-        categoryMap.set(cat.name.toLowerCase(), cat._id.toString());
-      }
+        const updatedDocs = await Promise.all(updatePromises);
+
+        const notFound = updatedDocs.filter((doc) => !doc).length;
+        if (notFound > 0) {
+            res.status(404).json({
+                message: `${notFound} auto-debit records not found for update.`,
+            });
+            return;
+        }
+
+        res.status(200).json({
+            message: 'Auto-debit records updated successfully.',
+            updatedCount: updatedDocs.length,
+            updatedDocs,
+        });
+    } catch (err) {
+        console.error('updateManyAutoDebits error:', err);
+        res.status(500).json({ message: 'Something went wrong while updating auto-debits.' });
     }
-
-    const updatePromises = updates.map(async (update) => {
-      const { _id, amount, categoryToDeduct, debitDateTime } = update;
-      const updateFields: any = {};
-
-      if (amount !== undefined) updateFields.amount = amount;
-      if (categoryToDeduct)
-        updateFields.categoryToDeduct = categoryMap.get(categoryToDeduct.trim().toLowerCase());
-      if (debitDateTime) updateFields.debitDateTime = new Date(debitDateTime);
-
-      return AutoDebitModel.findByIdAndUpdate(_id, updateFields, { new: true });
-    });
-
-    const updatedDocs = await Promise.all(updatePromises);
-
-    const notFound = updatedDocs.filter((doc) => !doc).length;
-    if (notFound > 0) {
-      res.status(404).json({
-        message: `${notFound} auto-debit records not found for update.`,
-      });
-      return;
-    }
-
-    res.status(200).json({
-      message: 'Auto-debit records updated successfully.',
-      updatedCount: updatedDocs.length,
-      updatedDocs,
-    });
-  } catch (err) {
-    console.error('updateManyAutoDebits error:', err);
-    res.status(500).json({ message: 'Something went wrong while updating auto-debits.' });
-  }
 }

@@ -7,6 +7,7 @@ export interface ITransactionLog extends Document {
   changeAmount: number;
   previousAmount: number;
   newAmount: number;
+  transaction_note?: string;
   createdAt: Date;
 }
 
@@ -42,10 +43,14 @@ const TransactionLogSchema = new Schema<ITransactionLog>(
       required: true,
       min: 0,
     },
+    transaction_note: {
+      type: String,
+      required: false,
+      trim: true,
+    },
     createdAt: {
       type: Date,
       default: Date.now,
-      expires: '2d',
     },
   },
   { timestamps: true }

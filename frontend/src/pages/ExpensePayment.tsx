@@ -43,6 +43,7 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
   const [selectedCategory, setSelectedCategory] = useState('');
   const [unFilteredCategories, setUnFilteredCategories] = useState<any[]>([]);
   const [amount, setAmount] = useState('');
+  const [transactionNote, setTransactionNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -60,7 +61,7 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
       const res = await apiClient.get(endpoints.categoryEndpoint);
       setUnFilteredCategories(res.data.categories);
       const filtered = res.data.categories.filter(
-        (c: any) => c.amount > 0 && c.name.toLowerCase() !== 'loan'
+        (c: any) => c.amount > 0 && c.name.toLowerCase() !== 'loan' && c.isUsedForExpense !== false
       );
       setCategories(filtered);
     } catch {
@@ -126,12 +127,13 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
         return;
       }
       if (isLoanPayment) {
-        await apiClient.post(endpoints.payLoanEndpoint, { name: selectedCategory, amount: amountNum });
+        await apiClient.post(endpoints.payLoanEndpoint, { name: selectedCategory, amount: amountNum, transaction_note: transactionNote });
       } else {
         await apiClient.patch(endpoints.categoryEndpoint, {
           name: selectedCategory,
           amount: amountNum,
           type: selectedCategory.toLowerCase() === 'loan' ? 'add' : 'subtract',
+          transaction_note: transactionNote
         });
       }
 
@@ -186,13 +188,26 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
 
       <Text style={tw`mb-2 text-base font-semibold`}>Enter Amount</Text>
       <TextInput
-        style={[tw`border border-gray-300 rounded px-3 py-2 mb-6`, { color: 'black' }]}
+        style={[tw`border border-gray-300 rounded px-3 py-2 mb-4`, { color: 'black' }]}
         keyboardType="numeric"
         placeholder="Amount"
         placeholderTextColor="#999"
         value={amount}
         onChangeText={setAmount}
       />
+
+      {!isLoanPayment && (
+        <>
+          <Text style={tw`mb-2 text-base font-semibold`}>Enter Note (Optional)</Text>
+          <TextInput
+            style={[tw`border border-gray-300 rounded px-3 py-2 mb-6`, { color: 'black' }]}
+            placeholder="Transaction Note"
+            placeholderTextColor="#999"
+            value={transactionNote}
+            onChangeText={setTransactionNote}
+          />
+        </>
+      )}
 
       <TouchableOpacity
         onPress={handlePayment}

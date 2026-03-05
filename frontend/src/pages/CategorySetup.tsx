@@ -17,6 +17,7 @@ interface CategoryInput {
     isNew?: boolean;
     isRepeat?: boolean;
     isAddToSavings?: boolean;
+    isUsedForExpense?: boolean;
 }
 
 interface Props {
@@ -31,12 +32,13 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [selected, setSelected] = useState<string[]>([]);
+    const [activeButtonIndex, setActiveButtonIndex] = useState<Record<number, number>>({});
 
     useEffect(() => {
         if (mode === 'init') {
             setCategories([
-                { name: 'savings', amount: '', isNew: true },
-                { name: 'loan', amount: '', isNew: true },
+                { name: 'savings', amount: '', isNew: true, isUsedForExpense: true, isAddToSavings: true },
+                { name: 'loan', amount: '', isNew: true, isUsedForExpense: false, isAddToSavings: false },
             ]);
             setLoading(false);
         } else {
@@ -61,9 +63,40 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
     };
 
     const handleToggleSavings = (index: number) => {
+        const name = categories[index].name.toLowerCase();
+        if (name === 'loan' || name === 'savings') return;
+
         const updated = [...categories];
         updated[index].isAddToSavings = !updated[index].isAddToSavings;
         setCategories(updated);
+    };
+
+    const handleToggleExpense = (index: number) => {
+        const name = categories[index].name.toLowerCase();
+        if (name === 'loan' || name === 'savings') return;
+
+        const updated = [...categories];
+        updated[index].isUsedForExpense = !updated[index].isUsedForExpense;
+        setCategories(updated);
+    };
+
+    const handleLongPress = (index: number) => {
+        const name = categories[index].name.toLowerCase();
+        if (name === 'loan' || name === 'savings') return;
+
+        let max;
+        if (mode === 'add') {
+            max = 4; // remove, repeat, wallet, cart
+        } else if (mode === 'update' && updateMode === 'temporary') {
+            max = 2; // wallet, cart
+        } else {
+            return; // no cycling for other modes
+        }
+
+        setActiveButtonIndex(prev => ({
+            ...prev,
+            [index]: ((prev[index] || 0) + 1) % max
+        }));
     };
 
     const fetchExistingCategories = async () => {
@@ -75,11 +108,25 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
             else {
                 res = await apiClient.get(endpoints.categoryEndpoint)
             }
-            const fetched = res.data.categories.map((c: any) => ({
-                name: c.name,
-                amount: String(c.amount),
-                isNew: false,
-            }));
+            const fetched = res.data.categories.map((c: any) => {
+                let isUsedForExpense = c.isUsedForExpense ?? true;
+                let isAddToSavings = c.isAddToSavings ?? true;
+
+                if (c.name.toLowerCase() === 'loan') {
+                    isUsedForExpense = false;
+                    isAddToSavings = false;
+                }
+                if (c.name.toLowerCase() === 'savings') isUsedForExpense = true;
+
+                return {
+                    name: c.name,
+                    amount: String(c.amount),
+                    isUsedForExpense: isUsedForExpense,
+                    isRepeat: updateMode === 'permanent' ? true : c.isRepeat, // Assuming backend returns recurrence
+                    isAddToSavings: isAddToSavings,
+                    isNew: false,
+                };
+            });
 
             if (mode === 'add') {
                 setCategories(fetched);
@@ -102,10 +149,13 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
 
     const handleAddRow = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setCategories([...categories, { name: '', amount: '', isNew: true, isRepeat: true, isAddToSavings: true }]);
+        setCategories([...categories, { name: '', amount: '', isNew: true, isRepeat: true, isAddToSavings: true, isUsedForExpense: true }]);
     };
 
     const handleToggleRepeat = (index: number) => {
+        const name = categories[index].name.toLowerCase();
+        if (name === 'loan' || name === 'savings') return;
+
         const updated = [...categories];
         updated[index].isRepeat = !updated[index].isRepeat;
         setCategories(updated);
@@ -300,40 +350,115 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
                         </View>
 
                         <View style={tw`flex-row items-center`}>
-                            {mode === 'add' && item.isNew && (
+                            {!(item.name.toLowerCase() === 'loan' || item.name.toLowerCase() === 'savings') && (
                                 <>
-                                    <TouchableOpacity style={tw`p-2`} onPress={() => handleToggleRepeat(idx)}>
-                                        <Ionicons
-                                            name="repeat"
-                                            size={22}
-                                            color={item.isRepeat ? 'blue' : 'gray'}
-                                        />
-                                    </TouchableOpacity>
+                                    {mode === 'add' && item.isNew && (
+                                        <>
+                                            {(activeButtonIndex[idx] || 0) === 0 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleRemoveRow(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons name="remove-circle" size={24} color="red" />
+                                                </TouchableOpacity>
+                                            )}
 
-                                    <TouchableOpacity style={tw`p-2`} onPress={() => handleToggleSavings(idx)}>
-                                        <Ionicons
-                                            name="wallet"
-                                            size={22}
-                                            color={item.isAddToSavings ? 'green' : 'gray'}
-                                        />
-                                    </TouchableOpacity>
+                                            {(activeButtonIndex[idx] || 0) === 1 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleToggleRepeat(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons
+                                                        name="repeat"
+                                                        size={22}
+                                                        color={item.isRepeat ? 'blue' : 'gray'}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+
+                                            {(activeButtonIndex[idx] || 0) === 2 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleToggleSavings(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons
+                                                        name="wallet"
+                                                        size={22}
+                                                        color={item.isAddToSavings ? 'green' : 'gray'}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+
+                                            {(activeButtonIndex[idx] || 0) === 3 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleToggleExpense(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons
+                                                        name="cart"
+                                                        size={22}
+                                                        color={item.isUsedForExpense ? 'orange' : 'gray'}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+                                        </>
+                                    )}
+
+                                    {mode === 'update' && updateMode === 'permanent' && (
+                                        <TouchableOpacity style={tw`p-2`} onPress={() => handleToggleRepeat(idx)}>
+                                            <Ionicons
+                                                name="repeat"
+                                                size={22}
+                                                color={item.isRepeat ? 'blue' : 'gray'}
+                                            />
+                                        </TouchableOpacity>
+                                    )}
+
+                                    {mode === 'update' && updateMode === 'temporary' && (
+                                        <>
+                                            {(activeButtonIndex[idx] || 0) === 0 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleToggleSavings(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons
+                                                        name="wallet"
+                                                        size={22}
+                                                        color={item.isAddToSavings ? 'green' : 'gray'}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+
+                                            {(activeButtonIndex[idx] || 0) === 1 && (
+                                                <TouchableOpacity
+                                                    style={tw`p-2`}
+                                                    onPress={() => handleToggleExpense(idx)}
+                                                    onLongPress={() => handleLongPress(idx)}
+                                                >
+                                                    <Ionicons
+                                                        name="cart"
+                                                        size={22}
+                                                        color={item.isUsedForExpense ? 'orange' : 'gray'}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
+                                        </>
+                                    )}
                                 </>
                             )}
 
-                            {mode === 'delete' ? (
+                            {mode === 'delete' && !(item.name.toLowerCase() === 'loan' || item.name.toLowerCase() === 'savings') && (
                                 <CheckBox
                                     value={selected.includes(item.name)}
                                     onValueChange={() => handleToggleSelect(item.name)}
                                     tintColors={{ true: 'red', false: 'gray' }}
                                 />
-                            ) : (
-                                mode !== 'update' && mode !== 'init' && item.isNew && (
-                                    <TouchableOpacity onPress={() => handleRemoveRow(idx)} style={tw`p-2`}>
-                                        <Ionicons name="remove-circle" size={24} color="red" />
-                                    </TouchableOpacity>
-                                )
                             )}
-
                         </View>
 
                     </View>

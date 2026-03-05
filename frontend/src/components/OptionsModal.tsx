@@ -19,6 +19,7 @@ import CategorySetup from '../pages/CategorySetup';
 import ExpensePayment from '../pages/ExpensePayment';
 import FrequentApps from '../pages/FrequentApps';
 import NotesPage from '../pages/NotesPage';
+import TransactionHistory from '../pages/TransactionHistory';
 import Toast from 'react-native-toast-message';
 import { useDashboard } from '../context/DashboardContext';
 import apiClient from '../axios/axiosInterceptor';
@@ -31,7 +32,7 @@ interface Props {
   onClose: () => void;
 }
 
-type Mode = 'init' | 'add' | 'update' | 'delete' | 'expense' | 'loan' | 'frequent' | 'notes' | 'borrow' | null;
+type Mode = 'init' | 'add' | 'update' | 'delete' | 'expense' | 'loan' | 'frequent' | 'notes' | 'borrow' | 'history' | null;
 type UpdateMode = 'permanent' | 'temporary';
 
 const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
@@ -66,6 +67,10 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
   }, []);
 
   useEffect(() => {
+    if (!visible) {
+      Keyboard.dismiss();
+      keyboardHeight.setValue(0);
+    }
     setMode(null);
     setUpdateMode(undefined);
     setExpenseType(null);
@@ -153,7 +158,8 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
 
     if (mode === 'notes') return <NotesPage onBack={() => setMode(null)} />;
     if (mode === 'frequent') return <FrequentApps setActiveSection={() => setMode(null)} />;
-    if (mode && !['expense', 'loan', 'frequent', 'notes'].includes(mode)) {
+    if (mode === 'history') return <TransactionHistory onBack={() => setMode(null)} />;
+    if (mode && !['expense', 'loan', 'frequent', 'notes', 'history', 'borrow'].includes(mode)) {
       return (
         <CategorySetup
           setActiveSection={() => {
@@ -242,6 +248,13 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
           expanded={expandedSection === 'Notes'}
           onExpand={handleExpand}
         />
+
+        <OptionSection
+          label="Transaction History"
+          onSelect={() => setMode('history')}
+          expanded={expandedSection === 'Transaction History'}
+          onExpand={handleExpand}
+        />
       </ScrollView>
     );
   };
@@ -261,6 +274,7 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
     if (mode === 'init') return 'Reset Data';
     if (mode === 'delete') return 'Delete Categories';
     if (mode === 'notes') return 'Notes';
+    if (mode === 'history') return 'Transaction History';
     return 'Add New Categories';
   };
 
@@ -275,19 +289,18 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
       style={{ margin: 0, justifyContent: 'flex-end' }}
       useNativeDriver
     >
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Animated.View
-          style={[tw`bg-white rounded-t-3xl px-5 pt-5 pb-8 shadow-lg`, { marginBottom: keyboardHeight }]}
-        >
-          <View style={tw`flex-row justify-between items-center mb-4`}>
-            <Text style={tw`text-xl font-bold text-gray-900`}>{getTitle()}</Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={26} color="gray" />
-            </TouchableOpacity>
-          </View>
-          {renderContent()}
-        </Animated.View>
-      </KeyboardAvoidingView>
+      <Animated.View
+        style={[tw`bg-white rounded-t-3xl px-5 pt-5 shadow-lg`, { paddingBottom: Animated.add(keyboardHeight, 32) }]}
+      >
+        <View style={tw`flex-row justify-between items-center mb-4`}>
+          <Text style={tw`text-xl font-bold text-gray-900`}>{getTitle()}</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={26} color="gray" />
+          </TouchableOpacity>
+        </View>
+        {renderContent()}
+      </Animated.View>
+      <Toast visibilityTime={1500} topOffset={50} />
     </Modal>
   );
 };

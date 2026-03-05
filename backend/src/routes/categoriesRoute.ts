@@ -16,6 +16,8 @@ import {
   getAllAutoDebits,
   createManyAutoDebits,
   updateManyAutoDebits,
+  getTransactionLogs,
+  getGraphData,
 } from '../controllers/categoryController.js';
 
 const router = Router();
@@ -83,5 +85,9 @@ router.get("/auto-debits", getAllAutoDebits)
 router.post("/auto-debits", createManyAutoDebits);
 
 router.put("/auto-debits", updateManyAutoDebits);
+
+router.get("/transaction-logs", getTransactionLogs);
+
+router.get("/graph-data", getGraphData);
 
 export default router;

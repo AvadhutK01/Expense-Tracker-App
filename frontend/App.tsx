@@ -13,7 +13,7 @@ export default function App() {
           <MainRoutes />
         </DashboardProvider>
       </NavigationContainer>
-      <Toast visibilityTime={1500} />
+      <Toast visibilityTime={1500} topOffset={50} />
     </>
   );
 }

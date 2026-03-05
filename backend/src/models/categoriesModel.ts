@@ -4,6 +4,7 @@ export interface ICategory extends mongoose.Document {
   name: string;
   amount: number;
   isAddToSavings: boolean;
+  isUsedForExpense: boolean;
 }
 
 const CategorySchema = new mongoose.Schema<ICategory>(
@@ -19,6 +20,11 @@ const CategorySchema = new mongoose.Schema<ICategory>(
       min: 0,
     },
     isAddToSavings: {
+      type: Boolean,
+      default: true,
+      required: false
+    },
+    isUsedForExpense: {
       type: Boolean,
       default: true,
       required: false
