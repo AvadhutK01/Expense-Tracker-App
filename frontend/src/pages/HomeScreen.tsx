@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
-  Platform,
   TouchableOpacity,
   Dimensions,
 } from 'react-native'
@@ -18,8 +17,6 @@ import apiClient from '../axios/axiosInterceptor'
 import { endpoints } from '../axios/endpoint'
 import Toast from 'react-native-toast-message'
 import { useDashboard } from '../context/DashboardContext'
-import AsyncStorage from '@react-native-async-storage/async-storage'
-import { getInstalledApps } from 'react-native-get-app-list'
 import { LineChart, PieChart } from 'react-native-chart-kit'
 
 // Icons
@@ -129,38 +126,6 @@ export default function HomeScreen({ navigation }: Props) {
       fetchGraphData()
     }
   }, [activeTab])
-
-  useEffect(() => {
-    const loadInstalledAppsInBackground = async () => {
-      if (Platform.OS !== 'android') return
-
-      try {
-        const cached = await AsyncStorage.getItem('@installed_apps')
-        if (cached) return;
-
-        const appsRaw = await getInstalledApps()
-        const filtered = appsRaw.filter(
-          (a: any) => a.packageName !== 'com.anonymous.expense_tracker'
-        )
-
-        const formatted = filtered.map((a: any) => ({
-          appName: a.appName || a.label,
-          packageName: a.packageName,
-          icon: a.icon?.startsWith('data:')
-            ? a.icon
-            : a.icon
-              ? `data:image/png;base64,${a.icon}`
-              : null,
-        }))
-
-        await AsyncStorage.setItem('@installed_apps', JSON.stringify(formatted))
-      } catch (err) {
-        console.error('⚠️ Error caching installed apps:', err)
-      }
-    }
-
-    loadInstalledAppsInBackground()
-  }, [])
 
 
   const onRefresh = useCallback(async () => {
@@ -378,13 +343,26 @@ export default function HomeScreen({ navigation }: Props) {
     }
 
     const total = allCategories.length
-    const pieData = allCategories.map((cat, index) => ({
-      name: cat.name.length > 6 ? cat.name.substring(0, 6) + '...' : cat.name,
-      amount: cat.amount,
-      color: generateColor(index, total),
-      legendFontColor: '#4B5563',
-      legendFontSize: 12,
-    }))
+    const pieData = allCategories.map((cat, index) => {
+      let color: string
+      const categoryNameLower = cat.name.toLowerCase()
+      
+      if (categoryNameLower === 'loan') {
+        color = '#EF4444' // Red for loan
+      } else if (categoryNameLower === 'savings') {
+        color = '#10B981' // Green for savings
+      } else {
+        color = generateColor(index, total) // Dynamic color for others
+      }
+      
+      return {
+        name: cat.name.length > 6 ? cat.name.substring(0, 6) + '...' : cat.name,
+        amount: cat.amount,
+        color,
+        legendFontColor: '#4B5563',
+        legendFontSize: 12,
+      }
+    })
 
     return (
       <View>

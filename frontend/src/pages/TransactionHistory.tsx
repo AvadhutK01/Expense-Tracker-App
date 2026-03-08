@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, memo } from 'react';
 import {
     View,
     Text,
@@ -27,6 +27,45 @@ interface TransactionLog {
 interface Props {
     onBack: () => void;
 }
+
+const TransactionItem = memo(({ item }: { item: TransactionLog }) => {
+    const isAdd = item.changeType === 'add';
+    const isLoan = item.categoryName.toLowerCase() === 'loan';
+    const amountColor = isLoan ? (isAdd ? '#EF4444' : '#10B981') : (isAdd ? '#10B981' : '#EF4444');
+
+    const formatDateTime = (isoString: string) => {
+        const date = new Date(isoString);
+        return new Intl.DateTimeFormat('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true,
+        }).format(date);
+    };
+
+    return (
+        <View style={tw`bg-white p-4 mb-3 rounded-xl shadow-sm border border-gray-100`}>
+            <View style={tw`flex-row justify-between items-center mb-2`}>
+                <Text style={tw`text-base font-bold text-gray-800`}>{item.categoryName}</Text>
+                <Text style={[tw`text-base font-bold`, { color: amountColor }]}>
+                    {isAdd ? '+' : '-'} ₹{item.changeAmount}
+                </Text>
+            </View>
+
+            {item.transaction_note && (
+                <Text style={tw`text-sm text-gray-600 mb-2 italic`}>"{item.transaction_note}"</Text>
+            )}
+
+            <View style={tw`flex-row justify-between items-center`}>
+                <Text style={tw`text-xs text-gray-400`}>{formatDateTime(item.createdAt)}</Text>
+                <Text style={tw`text-xs text-blue-500 font-medium`}>Bal: ₹{item.newAmount}</Text>
+            </View>
+        </View>
+    );
+});
 
 const TransactionHistory: React.FC<Props> = ({ onBack }) => {
     const [logs, setLogs] = useState<TransactionLog[]>([]);
@@ -92,31 +131,6 @@ const TransactionHistory: React.FC<Props> = ({ onBack }) => {
         }).format(date);
     };
 
-    const renderLogItem = ({ item }: { item: TransactionLog }) => {
-        const isAdd = item.changeType === 'add';
-        const isLoan = item.categoryName.toLowerCase() === 'loan';
-        const amountColor = isLoan ? (isAdd ? '#EF4444' : '#10B981') : (isAdd ? '#10B981' : '#EF4444');
-        return (
-            <View style={tw`bg-white p-4 mb-3 rounded-xl shadow-sm border border-gray-100`}>
-                <View style={tw`flex-row justify-between items-center mb-2`}>
-                    <Text style={tw`text-base font-bold text-gray-800`}>{item.categoryName}</Text>
-                    <Text style={[tw`text-base font-bold`, { color: amountColor }]}>
-                        {isAdd ? '+' : '-'} ₹{item.changeAmount}
-                    </Text>
-                </View>
-
-                {item.transaction_note && (
-                    <Text style={tw`text-sm text-gray-600 mb-2 italic`}>"{item.transaction_note}"</Text>
-                )}
-
-                <View style={tw`flex-row justify-between items-center`}>
-                    <Text style={tw`text-xs text-gray-400`}>{formatDateTime(item.createdAt)}</Text>
-                    <Text style={tw`text-xs text-blue-500 font-medium`}>Bal: ₹{item.newAmount}</Text>
-                </View>
-            </View>
-        );
-    };
-
     return (
         <View>
             <TouchableOpacity onPress={onBack} style={tw`mb-3`}>
@@ -131,7 +145,7 @@ const TransactionHistory: React.FC<Props> = ({ onBack }) => {
                 <View style={{ height: 400 }}>
                     <FlatList
                         data={logs}
-                        renderItem={renderLogItem}
+                        renderItem={({ item }) => <TransactionItem item={item} />}
                         keyExtractor={item => item._id}
                         onEndReached={loadMore}
                         onEndReachedThreshold={0.5}

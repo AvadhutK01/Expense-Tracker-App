@@ -78,6 +78,7 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
   }, [visible]);
 
   const handleSuccess = () => {
+    Keyboard.dismiss();
     refreshDashboard();
     onClose();
   };
@@ -136,7 +137,10 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
     if (mode === 'borrow') {
       return (
         <BorrowMoney
-          onBack={() => setMode(null)}
+          onBack={() => {
+            Keyboard.dismiss();
+            setMode(null);
+          }}
           onSuccess={handleSuccess}
         />
       );
@@ -145,8 +149,12 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
       return (
         <ExpensePayment
           type={expenseType}
-          onBack={() => setMode(null)}
+          onBack={() => {
+            Keyboard.dismiss();
+            setMode(null);
+          }}
           onSuccess={() => {
+            Keyboard.dismiss();
             setMode(null);
             setExpenseType(null);
             handleSuccess();
@@ -156,19 +164,25 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
       );
     }
 
-    if (mode === 'notes') return <NotesPage onBack={() => setMode(null)} />;
-    if (mode === 'frequent') return <FrequentApps setActiveSection={() => setMode(null)} />;
-    if (mode === 'history') return <TransactionHistory onBack={() => setMode(null)} />;
+    if (mode === 'notes') return <NotesPage onBack={() => { Keyboard.dismiss(); setMode(null); }} />;
+    if (mode === 'frequent') return <FrequentApps setActiveSection={() => { Keyboard.dismiss(); setMode(null); }} />;
+    if (mode === 'history') return <TransactionHistory onBack={() => { Keyboard.dismiss(); setMode(null); }} />;
     if (mode && !['expense', 'loan', 'frequent', 'notes', 'history', 'borrow'].includes(mode)) {
       return (
         <CategorySetup
           setActiveSection={() => {
+            Keyboard.dismiss();
             setMode(null);
             setUpdateMode(undefined);
           }}
           mode={mode as 'add' | 'init' | 'update' | 'delete'}
           updateMode={mode === 'update' ? updateMode : undefined}
-          onSuccess={handleSuccess}
+          onSuccess={() => {
+            Keyboard.dismiss();
+            setMode(null);
+            setUpdateMode(undefined);
+            handleSuccess();
+          }}
         />
       );
     }

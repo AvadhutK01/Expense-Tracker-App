@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Animated, Easing } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Animated, Easing, Keyboard } from 'react-native';
 import tw from 'tailwind-react-native-classnames';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -18,7 +18,7 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
     const [saved, setSaved] = useState(true);
     const [lastSavedNote, setLastSavedNote] = useState('');
     const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-    const spinValue = useRef(new Animated.Value(0)).current;
+    const spinValue = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         fetchNote();
@@ -78,23 +78,28 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
 
     const startSpinning = () => {
         Animated.loop(
-            Animated.timing(spinValue, {
-                toValue: 1,
-                duration: 1000,
-                easing: Easing.linear,
-                useNativeDriver: true,
-            })
+            Animated.sequence([
+                Animated.timing(spinValue, {
+                    toValue: 1.2,
+                    duration: 500,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(spinValue, {
+                    toValue: 1,
+                    duration: 500,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: true,
+                }),
+            ])
         ).start();
     };
 
     const stopSpinning = () => {
-        spinValue.stopAnimation(() => spinValue.setValue(0));
+        spinValue.stopAnimation(() => spinValue.setValue(1));
     };
 
-    const spin = spinValue.interpolate({
-        inputRange: [0, 1],
-        outputRange: ['0deg', '360deg'],
-    });
+    const scale = spinValue;
 
     if (loading) {
         return (
@@ -107,13 +112,13 @@ const NotesPage: React.FC<NotesPageProps> = ({ onBack }) => {
     return (
         <View>
             <View style={tw`flex-row justify-between items-center mb-4`}>
-                <TouchableOpacity onPress={onBack} style={tw`mb-3`}>
+                <TouchableOpacity onPress={() => { Keyboard.dismiss(); onBack(); }} style={tw`mb-3`}>
                     <Text style={tw`text-blue-500 text-sm`}>← Back</Text>
                 </TouchableOpacity>
 
                 <View style={tw`mb-3`}>
                     {saving ? (
-                        <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                        <Animated.View style={{ transform: [{ scale }] }}>
                             <Ionicons name="cloud-upload-outline" size={22} color="#3b82f6" />
                         </Animated.View>
                     ) : saved ? (

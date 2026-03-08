@@ -33,7 +33,7 @@ interface Props {
 
 export default function FrequentApps({ setActiveSection }: Props) {
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>([]);
-  const [frequentApps, setFrequentApps] = useState<string[]>([]);
+  const [frequentApps, setFrequentApps] = useState<InstalledApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,8 +57,24 @@ export default function FrequentApps({ setActiveSection }: Props) {
         setLoading(false);
         return;
       }
-      const cached = await AsyncStorage.getItem('@installed_apps')
-      if (cached) setInstalledApps(JSON.parse(cached))
+      const data = await getInstalledApps();
+      const filtered = data.filter(
+        (a: any) => a.packageName !== 'com.anonymous.expense_tracker' && a.appName
+      )
+
+      const formatted = filtered.map((a: any) => ({
+        appName: a.appName || a.label,
+        packageName: a.packageName,
+        icon: a.icon?.startsWith('data:')
+          ? a.icon
+          : a.icon
+            ? `data:image/png;base64,${a.icon}`
+            : null,
+      }))
+      
+      // Sort by app name for better UX
+      formatted.sort((a, b) => a.appName.localeCompare(b.appName))
+      setInstalledApps(formatted)
     } catch (err) {
       console.error('Error fetching apps:', err);
       Toast.show({
@@ -85,7 +101,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
     }
   };
 
-  const saveFrequentApps = async (apps: string[]) => {
+  const saveFrequentApps = async (apps: InstalledApp[]) => {
     try {
       await AsyncStorage.setItem('@frequent_apps', JSON.stringify(apps));
     } catch (e) {
@@ -93,9 +109,11 @@ export default function FrequentApps({ setActiveSection }: Props) {
     }
   };
 
-  const addFrequentApp = async (packageName: string) => {
+  const addFrequentApp = async (app: InstalledApp) => {
     try {
-      const updated = [...new Set([...frequentApps, packageName])];
+      const alreadyExists = frequentApps.some((a) => a.packageName === app.packageName);
+      if (alreadyExists) return;
+      const updated = [...frequentApps, app];
       setFrequentApps(updated);
       await saveFrequentApps(updated);
       setEditMode(false);
@@ -107,7 +125,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
 
   const removeFrequentApp = async (packageName: string) => {
     try {
-      const updated = frequentApps.filter((a) => a !== packageName);
+      const updated = frequentApps.filter((a) => a.packageName !== packageName);
       setFrequentApps(updated);
       await saveFrequentApps(updated);
       setEditMode(false);
@@ -118,7 +136,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
     }
   };
 
-  const isFrequent = (pkg: string) => frequentApps.includes(pkg);
+  const isFrequent = (pkg: string) => frequentApps.some((a) => a.packageName === pkg);
 
   const toggleEditMode = () => setEditMode((prev) => !prev);
 
@@ -130,7 +148,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
   if (loading || refreshing || !frequentLoaded) {
     return (
       <View style={tw`flex-1 justify-center items-center bg-white`}>
-        <ActivityIndicator size="large" color="#333" />
+        <ActivityIndicator size="large" color="#2563EB" />
         <Text>Loading apps...</Text>
       </View>
     );
@@ -139,7 +157,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
   const displayedApps =
     editMode || frequentApps.length === 0
       ? installedApps
-      : installedApps.filter((a) => frequentApps.includes(a.packageName));
+      : installedApps.filter((a) => frequentApps.some((f) => f.packageName === a.packageName));
 
   return (
     <View>
@@ -180,7 +198,7 @@ export default function FrequentApps({ setActiveSection }: Props) {
                     if (isFrequent(item.packageName)) {
                       await removeFrequentApp(item.packageName);
                     } else {
-                      await addFrequentApp(item.packageName);
+                      await addFrequentApp(item);
                     }
                   } else {
                     try {

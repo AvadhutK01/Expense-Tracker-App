@@ -8,6 +8,7 @@ import {
   Modal,
   FlatList,
   Image,
+  Keyboard,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import tw from 'tailwind-react-native-classnames';
@@ -71,16 +72,14 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
     }
   };
 
-  const loadFrequentApps = async () => {
+  const loadFrequentApps = async (): Promise<{ appName: string; packageName: string; icon?: string }[]> => {
     try {
       const data = await AsyncStorage.getItem('@frequent_apps');
-      const cache = await AsyncStorage.getItem('@installed_apps');
-
-      if (!data || !cache) return [];
-      const pkgNames = JSON.parse(data);
-      const installed = JSON.parse(cache);
-
-      return installed.filter((a: any) => pkgNames.includes(a.packageName));
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      // Guard: old format stored plain strings — filter those out
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item: any) => typeof item === 'object' && item !== null && item.packageName);
     } catch (err) {
       console.error('Error loading frequent apps:', err);
       return [];
@@ -121,10 +120,14 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
 
     setSubmitting(true);
     try {
-      const apps = await loadFrequentApps();
-      if (apps && apps.length === 0) {
-        Toast.show({ type: 'info', text1: 'Please add an app in Frequent Apps first' });
-        return;
+      if (type === 'online') {
+        const apps = await loadFrequentApps();
+        if (apps.length === 0) {
+          Toast.show({ type: 'info', text1: 'Please add an app in Frequent Apps first' });
+          setSubmitting(false);
+          return;
+        }
+        setFrequentApps(apps);
       }
       if (isLoanPayment) {
         await apiClient.post(endpoints.payLoanEndpoint, { name: selectedCategory, amount: amountNum, transaction_note: transactionNote });
@@ -144,8 +147,6 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
           showUPIScanner(amount, launchPaytmFallback);
           return;
         }
-
-        setFrequentApps(apps);
         setShowAppModal(true);
         return;
       }
@@ -168,7 +169,7 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
 
   return (
     <View>
-      <TouchableOpacity onPress={onBack} style={tw`mb-3`}>
+      <TouchableOpacity onPress={() => { Keyboard.dismiss(); onBack(); }} style={tw`mb-3`}>
         <Text style={tw`text-blue-500 text-sm`}>← Back</Text>
       </TouchableOpacity>
 
@@ -180,7 +181,7 @@ const ExpensePayment: React.FC<ExpensePaymentProps> = ({
           style={{ color: 'black', backgroundColor: 'white' }}
         >
           <Picker.Item label="Select..." value="" />
-          {categories.map((cat, idx) => (
+          {categories.map((cat: any, idx: number) => (
             <Picker.Item key={idx} label={`${cat.name} (₹${cat.amount})`} value={cat.name} />
           ))}
         </Picker>

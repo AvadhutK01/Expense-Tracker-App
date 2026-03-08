@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: process.env.EXPO_PUBLIC_API_URL,
-  timeout: 10000,
+  timeout: 50000,
   headers: {
     'Content-Type': 'application/json',
   },

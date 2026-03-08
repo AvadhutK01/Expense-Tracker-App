@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, TextInput, TouchableOpacity, LayoutAnimation,
-    ScrollView, ActivityIndicator
+    ScrollView, ActivityIndicator, Keyboard
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import tw from 'tailwind-react-native-classnames';
@@ -322,7 +322,7 @@ const CategorySetup: React.FC<Props> = ({ setActiveSection, mode, updateMode, on
 
     return (
         <View>
-            <TouchableOpacity onPress={() => setActiveSection(null)} style={tw`mb-3`}>
+            <TouchableOpacity onPress={() => { Keyboard.dismiss(); setActiveSection(null); }} style={tw`mb-3`}>
                 <Text style={tw`text-blue-500 text-sm`}>← Back</Text>
             </TouchableOpacity>
 

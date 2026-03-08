@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Keyboard } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import tw from 'tailwind-react-native-classnames';
 import Toast from 'react-native-toast-message';
@@ -72,7 +72,7 @@ const BorrowMoney: React.FC<BorrowMoneyProps> = ({ onBack, onSuccess }) => {
 
   return (
     <View>
-      <TouchableOpacity onPress={onBack} style={tw`mb-3`}>
+      <TouchableOpacity onPress={() => { Keyboard.dismiss(); onBack(); }} style={tw`mb-3`}>
         <Text style={tw`text-blue-500 text-sm`}>← Back</Text>
       </TouchableOpacity>
 
@@ -99,7 +99,7 @@ const BorrowMoney: React.FC<BorrowMoneyProps> = ({ onBack, onSuccess }) => {
           style={{ color: 'black', backgroundColor: 'white' }}
         >
           <Picker.Item label="Select..." value="" />
-          {categories.map((cat, idx) => (
+          {categories.map((cat: any, idx: number) => (
             <Picker.Item
               key={idx}
               label={`${cat.name} (₹${cat.amount})`}
