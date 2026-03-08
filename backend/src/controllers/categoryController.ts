@@ -328,19 +328,15 @@ export async function updateCategories(
 
                 updatedDocs.push(existing);
 
-                if (changeAmount !== 0) {
-                    await TransactionLogModel.create({
-                        categoryId: existing._id,
-                        categoryName: existing.name,
-                        changeType,
-                        changeAmount,
-                        previousAmount,
-                        newAmount,
-                        transaction_note: changeType === 'add'
-                            ? `money added to ${existing.name}`
-                            : `money deducted from ${existing.name}`
-                    });
-                }
+                await TransactionLogModel.create({
+                    categoryId: existing._id,
+                    categoryName: existing.name,
+                    changeType: 'add',
+                    changeAmount: newAmount,
+                    previousAmount,
+                    newAmount,
+                    transaction_note: `${existing.name} category updated${mode === 'permanent' ? ' (recurring)' : ''}`
+                });
             } else {
                 updatedDocs.push(null);
             }
