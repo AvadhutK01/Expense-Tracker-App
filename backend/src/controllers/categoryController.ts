@@ -567,6 +567,8 @@ export async function getTransactionLogs(
 
 /**
  * Fetches graph data: daily savings/loan amounts from transaction logs.
+ * Fills gaps between dates with the last known value (forward fill).
+ * Does not backfill before the first transaction.
  */
 export async function getGraphData(
     req: Request,
@@ -583,14 +585,48 @@ export async function getGraphData(
             .sort({ createdAt: 1 })
             .lean();
 
-        // Group by date (IST), keeping last entry per day
+        // Helper to get ISO date string in IST timezone (YYYY-MM-DD format)
+        const getISODateString = (date: Date): string => {
+            const istDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+            return istDate.toISOString().split('T')[0];
+        };
+
+        // Group by date (IST), keeping last entry per day, then fill gaps
         const groupByDate = (logs: any[]) => {
+            if (logs.length === 0) return [];
+
+            // Group logs by date, keeping last entry per day
             const map = new Map<string, number>();
             for (const log of logs) {
-                const date = new Date(log.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
-                map.set(date, log.newAmount);
+                const dateStr = getISODateString(new Date(log.createdAt));
+                map.set(dateStr, log.newAmount);
             }
-            return Array.from(map.entries()).map(([date, amount]) => ({ date, amount }));
+
+            // Get sorted dates
+            const dates = Array.from(map.keys()).sort();
+            if (dates.length === 0) return [];
+
+            // Fill gaps from first transaction date to TODAY with last known values
+            const result: { date: string; amount: number }[] = [];
+            const firstDate = new Date(dates[0]);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Reset to start of day
+
+            let currentDate = new Date(firstDate);
+            let lastAmount = map.get(dates[0])!;
+
+            while (currentDate <= today) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                if (map.has(dateStr)) {
+                    lastAmount = map.get(dateStr)!;
+                }
+                result.push({ date: dateStr, amount: lastAmount });
+
+                // Move to next day
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            return result;
         };
 
         res.status(200).json({
