@@ -567,6 +567,7 @@ export async function getTransactionLogs(
 
 /**
  * Fetches graph data: daily savings/loan amounts from transaction logs.
+ * Fills gaps by carrying forward the previous day's value.
  */
 export async function getGraphData(
     req: Request,
@@ -583,20 +584,42 @@ export async function getGraphData(
             .sort({ createdAt: 1 })
             .lean();
 
-        // Group by date (IST), keeping last entry per day
-        const groupByDate = (logs: any[]) => {
+        // Group by date (IST), keeping last entry per day, then fill gaps
+        const groupByDateWithGaps = (logs: any[]) => {
             const map = new Map<string, number>();
             for (const log of logs) {
                 const date = new Date(log.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
                 map.set(date, log.newAmount);
             }
-            return Array.from(map.entries()).map(([date, amount]) => ({ date, amount }));
+
+            if (map.size === 0) return [];
+
+            // Get all dates from first to last
+            const sortedDates = Array.from(map.keys()).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+            const firstDate = new Date(sortedDates[0]);
+            const lastDate = new Date(sortedDates[sortedDates.length - 1]);
+
+            // Fill gaps by carrying forward previous value
+            const result = [];
+            let currentDate = new Date(firstDate);
+            let lastValue = map.get(sortedDates[0]) || 0;
+
+            while (currentDate <= lastDate) {
+                const dateStr = currentDate.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' });
+                if (map.has(dateStr)) {
+                    lastValue = map.get(dateStr)!;
+                }
+                result.push({ date: dateStr, amount: lastValue });
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
+            return result;
         };
 
         res.status(200).json({
             message: 'Graph data fetched.',
-            savings: groupByDate(savingsLogs),
-            loan: groupByDate(loanLogs),
+            savings: groupByDateWithGaps(savingsLogs),
+            loan: groupByDateWithGaps(loanLogs),
         });
     } catch (err) {
         console.error('getGraphData error:', err);
