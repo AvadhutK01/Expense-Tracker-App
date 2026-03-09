@@ -585,10 +585,9 @@ export async function getGraphData(
             .sort({ createdAt: 1 })
             .lean();
 
-        // Helper to get ISO date string in IST timezone (YYYY-MM-DD format)
-        const getISODateString = (date: Date): string => {
-            const istDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-            return istDate.toISOString().split('T')[0];
+        // Helper to get date string in IST timezone using original format
+        const getDateString = (date: Date): string => {
+            return new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' })).toLocaleDateString('en-IN');
         };
 
         // Group by date (IST), keeping last entry per day, then fill gaps
@@ -598,17 +597,28 @@ export async function getGraphData(
             // Group logs by date, keeping last entry per day
             const map = new Map<string, number>();
             for (const log of logs) {
-                const dateStr = getISODateString(new Date(log.createdAt));
+                const dateStr = getDateString(new Date(log.createdAt));
                 map.set(dateStr, log.newAmount);
             }
 
             // Get sorted dates
-            const dates = Array.from(map.keys()).sort();
+            const dates = Array.from(map.keys()).sort((a, b) => {
+                // Parse dates in en-IN format (DD/MM/YYYY) for proper sorting
+                const [dayA, monthA, yearA] = a.split('/').map(Number);
+                const [dayB, monthB, yearB] = b.split('/').map(Number);
+                const dateA = new Date(yearA, monthA - 1, dayA);
+                const dateB = new Date(yearB, monthB - 1, dayB);
+                return dateA.getTime() - dateB.getTime();
+            });
             if (dates.length === 0) return [];
 
             // Fill gaps from first transaction date to TODAY with last known values
             const result: { date: string; amount: number }[] = [];
-            const firstDate = new Date(dates[0]);
+            
+            // Parse first date
+            const [dayFirst, monthFirst, yearFirst] = dates[0].split('/').map(Number);
+            const firstDate = new Date(yearFirst, monthFirst - 1, dayFirst);
+            
             const today = new Date();
             today.setHours(0, 0, 0, 0); // Reset to start of day
 
@@ -616,7 +626,7 @@ export async function getGraphData(
             let lastAmount = map.get(dates[0])!;
 
             while (currentDate <= today) {
-                const dateStr = currentDate.toISOString().split('T')[0];
+                const dateStr = currentDate.toLocaleDateString('en-IN');
                 if (map.has(dateStr)) {
                     lastAmount = map.get(dateStr)!;
                 }
