@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import categoriesRouter from './routes/categoriesRoute.js';
+import chatRouter from './routes/chatRoutes.js';
 import dotenv from "dotenv";
 import connectToDatabase from './utils/dbConnection.js';
 import cors from 'cors';
@@ -23,9 +24,10 @@ app.post('/echo', (req: Request, res: Response) => {
 });
 
 app.use('/categories', categoriesRouter);
+app.use('/chat', chatRouter);
 
 connectToDatabase().then(() => {
-  app.listen(9000, () => {
+  app.listen(7000, () => {
     console.log(`🚀 Server is running`);
   });
 }).catch((err) => {

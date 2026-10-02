@@ -475,6 +475,17 @@ export default function HomeScreen({ navigation }: Props) {
     <SafeAreaView style={tw`flex-1 bg-gray-100`}>
       {renderTabs()}
       {activeTab === 'dashboard' ? renderDashboardTab() : renderGraphsTab()}
+      
+      {/* AI Assistant FAB */}
+      <TouchableOpacity
+        onPress={() => navigation.navigate('Chat')}
+        style={[
+          tw`absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center bg-blue-600`,
+          { elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3 }
+        ]}
+      >
+        <MaterialIcons name="auto-awesome" size={28} color="white" />
+      </TouchableOpacity>
     </SafeAreaView>
   )
 }
