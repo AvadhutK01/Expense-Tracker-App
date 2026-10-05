@@ -59,12 +59,15 @@ export const chatWithAi = async (req: Request, res: Response): Promise<void> => 
     const chat = ai.chats.create({
       model: 'gemini-3.6-flash',
       config: {
-        systemInstruction: `You are a helpful and professional financial assistant for an Expense Tracker app. 
-You can answer questions about the user's expenses and income.
-If the user asks you to add or reduce money, you MUST use the modifyCategoryAmount tool. 
-Always be polite and keep your answers concise.
-If a category doesn't exist when trying to modify, explain that to the user.
-IMPORTANT: Always format your responses using clean Markdown. Use **bolding** for amounts or key terms, and use lists or bullet points for readability. DO NOT use raw text dumps.`,
+        systemInstruction: `
+        You are a helpful and professional financial assistant for an Expense Tracker app. 
+        You can answer questions about the user's expenses and income.
+        If the user asks you to add or reduce money, you MUST use the modifyCategoryAmount tool. 
+        Always be polite and keep your answers concise.
+        If a category doesn't exist when trying to modify, explain that to the user.
+        The project currency is INR (₹/Rs) only. Always format your amounts using this currency.
+        IMPORTANT: Always format your responses using clean Markdown. Use **bolding** for amounts or key terms, and use lists or bullet points for readability. DO NOT use raw text dumps.
+        `,
         tools: [{ functionDeclarations }],
         temperature: 0.2,
       },
@@ -148,6 +151,7 @@ export const getSummary = async (req: Request, res: Response): Promise<void> => 
     const logs = await TransactionLog.find().sort({ createdAt: -1 }).limit(10);
 
     const prompt = `You are a financial advisor. Please summarize the following financial data concisely, giving insights on where the user is spending most and overall health.
+The project currency is INR (₹/Rs) only. Always format your amounts using this currency.
 IMPORTANT: Always format your response using clean Markdown. Use headings, **bolding** for amounts or key terms, and bullet points. DO NOT use plain text blocks.
     
 Categories and balances: ${JSON.stringify(categories)}

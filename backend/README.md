@@ -5,13 +5,13 @@
 ![MongoDB](https://img.shields.io/badge/MongoDB-4EA94B?style=for-the-badge&logo=mongodb&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
 
-The backend API for the Expense Tracker application. Built with **Node.js**, **Express**, and **TypeScript**, it handles data persistence with **MongoDB** and supports features like auto-debit scheduling.
+The backend API for the Expense Tracker application. Built with **Node.js**, **Express**, and **TypeScript**, it handles data persistence with **MongoDB** and supports scheduled tasks.
 
 ## 🔑 Key Features
 
 - **RESTful API**: Endpoints for managing categories, transactions, and notes.
 - **Data Integrity**: Schema validation using **Mongoose**.
-- **Scheduled Tasks**: Automated processes (like auto-debits) using `node-cron`.
+- **Scheduled Tasks**: Automated processes using `node-cron`.
 - **Type Safety**: Fully typed codebase with **TypeScript**.
 
 ## 🛠️ Tech Stack
@@ -64,7 +64,7 @@ npm start
 
 ## 📂 Project Structure
 
-- `src/models`: Mongoose schemas (AutoDebit, Categories, Notes, RecurringCategories, TransactionLog).
+- `src/models`: Mongoose schemas (Categories, Notes, RecurringCategories, TransactionLog).
 - `src/routes`: API route definitions.
 - `src/controllers`: Business logic for requests.
 - `src/utils`: Helper functions.

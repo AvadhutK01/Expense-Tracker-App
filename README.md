@@ -13,7 +13,7 @@ Welcome to the **Complete Expense Tracker Solution**! This project is a feature-
 - **📊 Expense Tracking**: Detailed transaction logging to keep track of every penny.
 - **📂 Category Management**: Create and manage custom categories for better organization.
 - **🔄 Recurring Payments**: Set up and track recurring categories and expenses.
-- **💸 Auto Debit**: Manage auto-debit transactions automatically.
+
 - **📝 Notes**: Add notes to write down expenses.
 - **📱 Mobile First**: Built with React Native and Expo for a smooth mobile experience.
 
@@ -26,7 +26,7 @@ Welcome to the **Complete Expense Tracker Solution**! This project is a feature-
 ├── 📂 backend         # Node.js & Express API (TypeScript)
 │   ├── 📂 src
 │   │   ├── 📂 controllers # Request Handlers
-│   │   ├── 📂 models      # Mongoose Schema Definitions (AutoDebit, Categories, etc.)
+│   │   ├── 📂 models      # Mongoose Schema Definitions (Categories, etc.)
 │   │   ├── 📂 routes      # API Endpoints
 │   │   └── 📂 utils       # Utilities
 │   └── 📄 package.json    # Backend Dependencies

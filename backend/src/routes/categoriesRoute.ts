@@ -6,16 +6,13 @@ import {
   updateSingleCategory,
   getAllCategories,
   payLoanAmount,
-  cronController,
-  bankEmiDebitCron,
+  runMonthlyRollover,
   deleteCategory,
   revertLatestTransaction,
   createOrUpdateNote,
   getNote,
   borrowMoney,
-  getAllAutoDebits,
-  createManyAutoDebits,
-  updateManyAutoDebits,
+
   getTransactionLogs,
   getGraphData,
 } from '../controllers/categoryController.js';
@@ -74,17 +71,9 @@ router.post('/note', createOrUpdateNote);
 
 router.get('/note', getNote);
 
-router.get('/run-cron', cronController);
-
-router.get("/run-emi-debit-cron", bankEmiDebitCron);
+router.get('/run-monthly-rollover', runMonthlyRollover);
 
 router.post("/borrow-money", borrowMoney);
-
-router.get("/auto-debits", getAllAutoDebits)
-
-router.post("/auto-debits", createManyAutoDebits);
-
-router.put("/auto-debits", updateManyAutoDebits);
 
 router.get("/transaction-logs", getTransactionLogs);
 

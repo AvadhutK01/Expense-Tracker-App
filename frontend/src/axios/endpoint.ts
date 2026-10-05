@@ -6,7 +6,8 @@ export const endpoints = {
     revertLatestTransaction: "/categories/revert-latest-transaction",
     note: "/categories/note",
     borrowMoney: "/categories/borrow-money",
-    autoDebits: "/categories/auto-debits",
+
+    runMonthlyRollover: "/categories/run-monthly-rollover",
     transactionLogs: "/categories/transaction-logs",
     graphData: "/categories/graph-data"
 }

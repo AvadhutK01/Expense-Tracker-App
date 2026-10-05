@@ -127,6 +127,35 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
     );
   };
 
+  const handleRunMonthlyRollover = async () => {
+    Alert.alert(
+      'Confirm Monthly Rollover',
+      'Are you sure you want to run the monthly rollover? This will reset non-protected categories to 0 and apply recurring category amounts.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Run',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await apiClient.get(endpoints.runMonthlyRollover);
+              if (response.status === 200) {
+                Toast.show({ type: 'success', text1: 'Monthly Rollover Successful' });
+                setTimeout(handleSuccess, 1800);
+              } else {
+                Toast.show({ type: 'error', text1: 'Failed to run monthly rollover' });
+              }
+            } catch (error) {
+              console.error('Error running monthly rollover:', error);
+              Toast.show({ type: 'error', text1: 'An error occurred while running monthly rollover' });
+              setTimeout(handleSuccess, 1800);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const categoryItems: NestedItem[] = [
     'Add New Categories',
     { label: 'Update Categories', children: ['Recurring', 'Temporary'] },
@@ -253,6 +282,13 @@ const OptionsModal: React.FC<Props> = ({ visible, onClose }) => {
           label="Revert Latest Transaction"
           onSelect={handleRevertTransaction}
           expanded={expandedSection === 'Revert Latest Transaction'}
+          onExpand={handleExpand}
+        />
+
+        <OptionSection
+          label="Run Monthly Rollover"
+          onSelect={handleRunMonthlyRollover}
+          expanded={expandedSection === 'Run Monthly Rollover'}
           onExpand={handleExpand}
         />
 

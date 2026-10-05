@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, SafeAreaView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Markdown from 'react-native-markdown-display';
 import tw from 'tailwind-react-native-classnames';
 import apiClient from '../axios/axiosInterceptor';
@@ -62,6 +63,10 @@ export default function ChatScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={tw`flex-1 bg-white`}>
+      <KeyboardAvoidingView
+        style={tw`flex-1`}
+        behavior="padding"
+      >
       <View style={tw`flex-row items-center p-4 border-b border-gray-200`}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={tw`mr-3`}>
           <MaterialIcons name="arrow-back" size={24} color="black" />
@@ -119,6 +124,7 @@ export default function ChatScreen({ navigation }: Props) {
           <MaterialIcons name="send" size={24} color="white" />
         </TouchableOpacity>
       </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
