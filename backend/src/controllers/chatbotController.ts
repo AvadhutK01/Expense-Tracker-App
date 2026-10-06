@@ -57,7 +57,7 @@ export const chatWithAi = async (req: Request, res: Response): Promise<void> => 
     }
 
     const chat = ai.chats.create({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.5-flash',
       config: {
         systemInstruction: `
         You are a helpful and professional financial assistant for an Expense Tracker app. 
@@ -159,7 +159,7 @@ Recent transactions: ${JSON.stringify(logs)}
 `;
 
     const chat = ai.chats.create({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.5-flash',
       config: { temperature: 0.2 },
     });
 
