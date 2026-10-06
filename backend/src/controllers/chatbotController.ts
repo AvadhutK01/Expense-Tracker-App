@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { GoogleGenAI, Type, FunctionDeclaration } from '@google/genai';
 import Category from '../models/categoriesModel.js';
 import TransactionLog from '../models/transactionLogModel.js';
+import NoteModel from '../models/notesModel.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -45,6 +46,24 @@ const functionDeclarations: FunctionDeclaration[] = [
       required: ['categoryName', 'amount', 'action', 'note'],
     },
   },
+  {
+    name: 'getNote',
+    description: 'Get the current user note from the database.',
+  },
+  {
+    name: 'updateNote',
+    description: 'Update the user note in the database. Use this when the user wants to take a note, save a reminder, or update their existing note.',
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        content: {
+          type: Type.STRING,
+          description: 'The new content of the note.',
+        },
+      },
+      required: ['content'],
+    },
+  },
 ];
 
 export const chatWithAi = async (req: Request, res: Response): Promise<void> => {
@@ -61,8 +80,9 @@ export const chatWithAi = async (req: Request, res: Response): Promise<void> => 
       config: {
         systemInstruction: `
         You are a helpful and professional financial assistant for an Expense Tracker app. 
-        You can answer questions about the user's expenses and income.
+        You can answer questions about the user's expenses and income, and manage their notes.
         If the user asks you to add or reduce money, you MUST use the modifyCategoryAmount tool. 
+        If the user asks to save a note or reminder, you MUST use the updateNote tool.
         Always be polite and keep your answers concise.
         If a category doesn't exist when trying to modify, explain that to the user.
         The project currency is INR (₹/Rs) only. Always format your amounts using this currency.
@@ -87,6 +107,20 @@ export const chatWithAi = async (req: Request, res: Response): Promise<void> => 
         } else if (call.name === 'getRecentTransactions') {
           const logs = await TransactionLog.find().sort({ createdAt: -1 }).limit(10);
           toolResult = { logs };
+        } else if (call.name === 'getNote') {
+          const note = await NoteModel.findOne();
+          toolResult = { note: note ? note.content : 'No note exists yet.' };
+        } else if (call.name === 'updateNote') {
+          const args = call.args as any;
+          const { content } = args;
+          let note = await NoteModel.findOne();
+          if (!note) {
+            note = await NoteModel.create({ content });
+          } else {
+            note.content = content;
+            await note.save();
+          }
+          toolResult = { success: true, message: 'Note updated successfully.', note: note.content };
         } else if (call.name === 'modifyCategoryAmount') {
           const args = call.args as any;
           const { categoryName, amount, action, note } = args;
@@ -149,14 +183,17 @@ export const getSummary = async (req: Request, res: Response): Promise<void> => 
 
     const categories = await Category.find();
     const logs = await TransactionLog.find().sort({ createdAt: -1 }).limit(10);
+    const note = await NoteModel.findOne();
 
-    const prompt = `You are a financial advisor. Please summarize the following financial data concisely, giving insights on where the user is spending most and overall health.
-The project currency is INR (₹/Rs) only. Always format your amounts using this currency.
-IMPORTANT: Always format your response using clean Markdown. Use headings, **bolding** for amounts or key terms, and bullet points. DO NOT use plain text blocks.
-    
-Categories and balances: ${JSON.stringify(categories)}
-Recent transactions: ${JSON.stringify(logs)}
-`;
+    const prompt = `
+    You are a financial advisor. Please summarize the following financial data concisely, giving insights on where the user is spending most and overall health.
+    The project currency is INR (₹/Rs) only. Always format your amounts using this currency.
+    IMPORTANT: Always format your response using clean Markdown. Use headings, **bolding** for amounts or key terms, and bullet points. DO NOT use plain text blocks.
+        
+    Categories and balances: ${JSON.stringify(categories)}
+    Recent transactions: ${JSON.stringify(logs)}
+    User's current note/reminders: ${note ? note.content : 'None'}
+    `;
 
     const chat = ai.chats.create({
       model: 'gemini-3.5-flash-lite',
